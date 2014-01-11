@@ -460,8 +460,12 @@
 (evil-ex-define-cmd "show-digraphs" 'evil-ex-show-digraphs)
 
 ;; search command line
-(define-key evil-ex-search-keymap "\C-w" 'backward-kill-word)
 (define-key evil-ex-search-keymap "\d" #'evil-ex-delete-backward-char)
+(define-key evil-ex-search-keymap "\C-c" 'abort-recursive-edit)
+(define-key evil-ex-search-keymap "\C-r" 'evil-paste-from-register)
+(define-key evil-ex-search-keymap "\C-u" 'evil-delete-whole-line)
+(define-key evil-ex-search-keymap "\C-w" 'backward-kill-word)
+(define-key evil-ex-search-keymap [escape] 'abort-recursive-edit)
 
 ;; ex command line
 (define-key evil-ex-completion-map "\d" #'evil-ex-delete-backward-char)
