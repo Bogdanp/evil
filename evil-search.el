@@ -56,7 +56,7 @@ search module is used."
 
 ;; this customization is here because it requires
 ;; the knowledge of `evil-select-search-mode'
-(defcustom evil-search-module 'isearch
+(defcustom evil-search-module 'evil-search
   "The search module to be used."
   :type '(radio (const :tag "Emacs built-in isearch." :value isearch)
                 (const :tag "Evil interactive search." :value evil-search))
