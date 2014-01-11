@@ -460,6 +460,7 @@
 (evil-ex-define-cmd "show-digraphs" 'evil-ex-show-digraphs)
 
 ;; search command line
+(define-key evil-ex-search-keymap "\C-w" 'backward-kill-word)
 (define-key evil-ex-search-keymap "\d" #'evil-ex-delete-backward-char)
 
 ;; ex command line
