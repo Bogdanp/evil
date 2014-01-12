@@ -379,7 +379,6 @@
   (define-key evil-emacs-state-map "\C-w" 'evil-window-map))
 
 ;;; Minibuffer
-
 (define-key minibuffer-local-map "\C-p" 'evil-complete-next)
 (define-key minibuffer-local-map "\C-n" 'evil-complete-previous)
 (define-key minibuffer-local-map "\C-x\C-p" 'evil-complete-next-line)
@@ -391,7 +390,7 @@
 (define-key evil-normal-state-map [mouse-2] 'mouse-yank-primary)
 (define-key evil-insert-state-map [mouse-2] 'mouse-yank-primary)
 
-;; Ex
+;;; Ex
 (define-key evil-motion-state-map ":" 'evil-ex)
 (define-key evil-motion-state-map "!" 'evil-shell-command)
 
