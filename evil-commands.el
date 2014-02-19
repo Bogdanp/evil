@@ -1398,7 +1398,13 @@ of the block."
       (evil-apply-on-block #'evil-invert-case beg end nil)
     (evil-invert-case beg end)
     (when evil-this-motion
-      (goto-char end))))
+      (goto-char end)
+      (when (and evil-cross-lines
+                 evil-move-cursor-back
+                 (not (evil-visual-state-p))
+                 (not (evil-operator-state-p))
+                 (eolp) (not (eobp)) (not (bolp)))
+        (forward-char)))))
 
 (evil-define-operator evil-rot13 (beg end type)
   "ROT13 encrypt text."
@@ -2663,8 +2669,8 @@ the previous shell command is executed instead."
      ((zerop (length command))
       (if previous (error "No previous shell command")
         (error "No shell command")))
-     ((and beg end)
-      (shell-command-on-region beg end command t)
+     (evil-ex-range
+      (shell-command-on-region beg end command nil t)
       (goto-char beg)
       (evil-first-non-blank))
      (t
@@ -2685,6 +2691,49 @@ the previous shell command is executed instead."
                             (replace-regexp-in-string "\n" "^J" (cdr reg))
                           (cdr reg))))
         (newline)))))
+
+(evil-define-command evil-show-marks (mrks)
+  "Shows all marks.
+If MRKS is non-nil it should be a string and only registers
+corresponding to the characters of this string are shown."
+  :repeat nil
+  (interactive "<a>")
+  ;; To get markers and positions, we can't rely on 'global-mark-ring'
+  ;; provided by Emacs (although it will be much simpler and faster),
+  ;; because 'global-mark-ring' does not store mark characters, but
+  ;; only buffer name and position. Instead, 'evil-markers-alist' is
+  ;; used; this is list maintained by Evil for each buffer.
+  (let ((all-markers
+         ;; get global and local marks
+         (append (evil-filter-list #'(lambda (m)
+                                       (or (evil-global-marker-p (car m))
+                                           (not (markerp (cdr m)))))
+                                   evil-markers-alist)
+                 (evil-filter-list #'(lambda (m)
+                                       (or (not (evil-global-marker-p
+                                                 (car m)))
+                                           (not (markerp (cdr m)))))
+                                   (default-value 'evil-markers-alist)))))
+    (when mrks
+      (setq mrks (string-to-list mrks))
+      (setq all-markers (evil-filter-list #'(lambda (m)
+                                              (not (member (car m) mrks)))
+                                          all-markers)))
+    ;; map marks to list of 4-tuples (char row col file)
+    (setq all-markers
+          (mapcar #'(lambda (m)
+                      (with-current-buffer (marker-buffer (cdr m))
+                        (save-excursion
+                          (goto-char (cdr m))
+                          (list (car m)
+                                (1+ (count-lines 1 (line-beginning-position)))
+                                (current-column)
+                                (buffer-name)))))
+                  all-markers))
+    (evil-with-view-list "evil-marks"
+      (setq truncate-lines t)
+      (dolist (m (sort all-markers #'(lambda (a b) (< (car a) (car b)))))
+        (insert (apply 'format " %c %6d %6d %s\n" m))))))
 
 (eval-when-compile (require 'ffap))
 (evil-define-command evil-find-file-at-point-with-line ()
@@ -3142,13 +3191,15 @@ Default position is the beginning of the buffer."
   "Shows basic file information."
   (let* ((nlines   (count-lines (point-min) (point-max)))
          (curr     (line-number-at-pos (point)))
-         (perc     (* (/ (float curr) (float nlines)) 100.0))
+         (perc     (if (> nlines 0)
+                       (format "%d%%" (* (/ (float curr) (float nlines)) 100.0))
+                     "No lines in buffer"))
          (file     (buffer-file-name (buffer-base-buffer)))
          (writable (and file (file-writable-p file)))
          (readonly (if (and file (not writable)) "[readonly] " "")))
     (if file
-        (message "\"%s\" %d %slines --%d%%--" file nlines readonly perc)
-      (message "%d lines --%d%%--" nlines perc))))
+        (message "\"%s\" %d %slines --%s--" file nlines readonly perc)
+      (message "%d lines --%s--" nlines perc))))
 
 ;;; Window navigation
 
