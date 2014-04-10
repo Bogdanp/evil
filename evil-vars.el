@@ -1318,6 +1318,10 @@ buffer-region of the newly inserted text.")
   "The last piece of deleted text.
 The text should be less than a line.")
 
+(defvar evil-was-yanked-without-register t
+  "Whether text being saved to the numbered-register ring was
+not deleted and not yanked to a specific register.")
+
 (defvar evil-paste-count nil
   "The count argument of the current paste command.")
 
@@ -1523,7 +1527,35 @@ Otherwise the previous command is assumed as substitute.")
   "Keymap used in ex-search-mode.")
 (set-keymap-parent evil-ex-search-keymap minibuffer-local-map)
 
-(defconst evil-version "1.0-dev"
+(defconst evil-version
+  (eval-when-compile
+    (with-temp-buffer
+      (let ((dir (file-name-directory (or load-file-name
+                                          byte-compile-current-file))))
+        (cond
+         ;; git repository
+         ((and (file-exists-p (concat dir "/.git"))
+               (condition-case nil
+                   (zerop (call-process "git" nil '(t nil) nil
+                                        "rev-parse"
+                                        "--short" "HEAD"))
+                 (error nil)))
+          (goto-char (point-min))
+          (concat "evil-git-"
+                  (buffer-substring (point-min)
+                                    (line-end-position))))
+         ;; mercurial repository
+         ((and (file-exists-p (concat dir "/.hg"))
+               (condition-case nil
+                   (zerop (call-process "hg" nil '(t nil) nil
+                                        "parents"
+                                        "--template"
+                                        "evil-hg-{node|short}"))
+                 (error nil)))
+          (goto-char (point-min))
+          (buffer-substring (point-min) (line-end-position)))
+         ;; no repo, use plain version
+         (t "1.0-dev")))))
   "The current version of Evil")
 
 (defun evil-version ()
