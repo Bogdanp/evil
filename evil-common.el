@@ -1633,6 +1633,7 @@ register instead of replacing its content."
     (x-set-selection 'PRIMARY text))
    ((eq register ?+)
     (progn
+      (setq clipboard:last-value text)
       (x-set-selection 'CLIPBOARD text)
       (x-select-text text)))
    ((eq register ?-)
