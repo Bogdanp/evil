@@ -1539,6 +1539,13 @@ POS defaults to point."
       (setq evil-jump-list nil)
       (push-mark pos))))
 
+(setq clipboard:last-value nil)
+(defun get-clipboard-value ()
+  (let ((v (x-selection-value)))
+    (if v
+        (setq clipboard:last-value v)
+      clipboard:last-value)))
+
 (defun evil-get-register (register &optional noerror)
   "Return contents of REGISTER.
 Signal an error if empty, unless NOERROR is non-nil.
@@ -1567,7 +1574,7 @@ The following special registers are supported.
              ((eq register ?*)
               (x-get-selection-value))
              ((eq register ?+)
-              (x-get-clipboard))
+              (get-clipboard-value))
              ((eq register ?%)
               (or (buffer-file-name) (error "No file name")))
              ((= register ?#)
@@ -1625,7 +1632,9 @@ register instead of replacing its content."
    ((eq register ?*)
     (x-set-selection 'PRIMARY text))
    ((eq register ?+)
-    (x-set-selection 'CLIPBOARD text))
+    (progn
+      (x-set-selection 'CLIPBOARD text)
+      (x-select-text text)))
    ((eq register ?-)
     (setq evil-last-small-deletion text))
    ((eq register ?_) ; the black hole register
