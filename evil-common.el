@@ -1537,7 +1537,7 @@ POS defaults to point."
                 (set-marker marker nil))
             evil-jump-list)
       (setq evil-jump-list nil)
-      (push-mark pos))))
+      (push-mark pos t))))
 
 (setq clipboard:last-value nil)
 (defun get-clipboard-value ()
