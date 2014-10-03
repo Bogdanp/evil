@@ -3268,6 +3268,8 @@ REST is the unparsed remainder of TO."
                             (1+ (cdr obj))
                           (cdr obj))))
                   (list result (substring rest end))))
+               ((eq char ?0)
+                (list "\\&" rest))
                (t
                 (list (concat "\\" (char-to-string char)) rest))))
           start)))
