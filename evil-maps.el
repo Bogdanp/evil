@@ -358,8 +358,6 @@
 (define-key evil-insert-state-map "\C-d" 'evil-shift-left-line)
 (define-key evil-insert-state-map [remap delete-backward-char] 'evil-delete-backward-char-and-join)
 (define-key evil-insert-state-map [delete] 'delete-char)
-(define-key evil-insert-state-map [remap newline] 'evil-ret)
-(define-key evil-insert-state-map [remap newline-and-indent] 'evil-ret-and-indent)
 (define-key evil-insert-state-map [escape] 'evil-normal-state)
 (define-key evil-insert-state-map
   (read-kbd-macro evil-toggle-key) 'evil-emacs-state)
@@ -458,6 +456,9 @@
 (evil-ex-define-cmd "=" 'evil-ex-line-number)
 (evil-ex-define-cmd "!" 'evil-shell-command)
 (evil-ex-define-cmd "@:" 'evil-ex-repeat)
+(evil-ex-define-cmd "m[ake]" 'evil-make)
+(evil-ex-define-cmd "cn[ext]" 'next-error)
+(evil-ex-define-cmd "cp[revious]" 'previous-error)
 (evil-ex-define-cmd "set-initial-state" 'evil-ex-set-initial-state)
 (evil-ex-define-cmd "show-digraphs" 'evil-ex-show-digraphs)
 
@@ -473,6 +474,7 @@
 (define-key evil-ex-completion-map "\d" #'evil-ex-delete-backward-char)
 (define-key evil-ex-completion-map "\t" #'evil-ex-completion)
 (define-key evil-ex-completion-map [tab] #'evil-ex-completion)
+(define-key evil-ex-completion-map [remap completion-at-point] #'evil-ex-completion)
 (define-key evil-ex-completion-map "\C-a" 'evil-ex-completion)
 (define-key evil-ex-completion-map "\C-b" 'move-beginning-of-line)
 (define-key evil-ex-completion-map "\C-c" 'abort-recursive-edit)
