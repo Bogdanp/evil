@@ -72,6 +72,7 @@
 (define-key evil-normal-state-map "g?" 'evil-rot13)
 (define-key evil-normal-state-map "g~" 'evil-invert-case)
 (define-key evil-normal-state-map "zo" 'evil-open-fold)
+(define-key evil-normal-state-map "zO" 'evil-open-fold-rec)
 (define-key evil-normal-state-map "zc" 'evil-close-fold)
 (define-key evil-normal-state-map "za" 'evil-toggle-fold)
 (define-key evil-normal-state-map "zr" 'evil-open-folds)
@@ -461,6 +462,7 @@
 (evil-ex-define-cmd "cp[revious]" 'previous-error)
 (evil-ex-define-cmd "set-initial-state" 'evil-ex-set-initial-state)
 (evil-ex-define-cmd "show-digraphs" 'evil-ex-show-digraphs)
+(evil-ex-define-cmd "sor[t]" 'evil-ex-sort)
 
 ;; search command line
 (define-key evil-ex-search-keymap "\d" #'evil-ex-delete-backward-char)

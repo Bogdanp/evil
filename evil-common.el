@@ -516,70 +516,39 @@ If any character set is complemented, the result is also complemented."
   "Read from keyboard or INPUT and build a command description.
 Returns (CMD COUNT), where COUNT is the numeric prefix argument.
 Both COUNT and CMD may be nil."
-  (let ((input (listify-key-sequence input))
-        (inhibit-quit t)
-        char cmd count digit event seq)
-    (while (progn
-             (setq event (or (pop input) (read-event)))
-             (when (eq event ?\e)
-               (when (sit-for evil-esc-delay t)
-                 (setq event 'escape)))
-             (setq char (or (when (characterp event) event)
-                            (when (symbolp event)
-                              (get event 'ascii-character))))
-             ;; this trick from simple.el's `digit-argument'
-             ;; converts keystrokes like C-0 and C-M-1 to digits
-             (if (or (characterp char) (integerp char))
-                 (setq digit (- (logand char ?\177) ?0))
-               (setq digit nil))
-             (if (keymapp cmd)
-                 (setq seq (append seq (list event)))
-               (setq seq (list event)))
-             (setq cmd (key-binding (vconcat seq) t))
-             (cond
-              ;; if CMD is a keymap, we need to read more
-              ((keymapp cmd)
-               t)
-              ;; numeric prefix argument
-              ((or (eq cmd #'digit-argument)
-                   (and (eq (length seq) 1)
-                        (not (keymapp cmd))
-                        count
-                        (memq digit '(0 1 2 3 4 5 6 7 8 9))))
-               ;; store digits in a string, which is easily converted
-               ;; to a number afterwards
-               (setq count (concat (or count "")
-                                   (number-to-string digit)))
-               t)
-              ;; catch middle digits like "da2w"
-              ((and (not cmd)
-                    (> (length seq) 1)
-                    (memq digit '(0 1 2 3 4 5 6 7 8 9)))
-               (setq count (concat (or count "")
-                                   (number-to-string digit)))
-               ;; remove the digit from the key sequence
-               ;; so we can see if the previous one goes anywhere
-               (setq seq (nbutlast seq 1))
-               (setq cmd (key-binding (vconcat seq)))
-               t)
-              ((eq cmd 'negative-argument)
-               (unless count
-                 (setq count "-"))))))
-    ;; determine COUNT
-    (when (stringp count)
-      (if (string= count "-")
-          (setq count nil)
-        (setq count (string-to-number count))))
-    ;; return command description
-    (when (arrayp cmd)
-      (let ((result (evil-keypress-parser cmd)))
-        (setq cmd (car result)
-              count (cond
-                     ((and count (cadr result))
-                      (* count (cadr result)))
-                     (count count)
-                     (t (cadr result))))))
-    (list cmd count)))
+  (let (count negative)
+    (when input (setq unread-command-events (append input unread-command-events)))
+    (catch 'done
+      (while t
+        (let ((seq (read-key-sequence "")))
+          (when seq
+            (let ((cmd (key-binding seq)))
+              (cond
+               ((null cmd) (throw 'done (list nil nil)))
+               ((arrayp cmd) ; keyboard macro, recursive call
+                (let ((cmd (evil-keypress-parser cmd)))
+                  (throw 'done
+                         (list (car cmd)
+                               (if (or count (cadr cmd))
+                                   (list (car cmd) (* (or count 1)
+                                                      (or (cadr cmd) 1))))))))
+               ((or (eq cmd #'digit-argument)
+                    (and (eq cmd 'evil-digit-argument-or-evil-beginning-of-line)
+                         count))
+                (let* ((event (aref seq (- (length seq) 1)))
+                       (char (or (when (characterp event) event)
+                                 (when (symbolp event)
+                                   (get event 'ascii-character))))
+                       (digit (if (or (characterp char) (integerp char))
+                                  (- (logand char ?\177) ?0))))
+                  (setq count (+ (* 10 (or count 0)) digit))))
+               ((eq cmd #'negative-argument)
+                (setq negative (not negative)))
+               (t
+                (throw 'done (list cmd
+                                   (and count
+                                        (* count
+                                           (if negative -1 1))))))))))))))
 
 (defun evil-read-key (&optional prompt)
   "Read a key from the keyboard.
@@ -836,7 +805,6 @@ BUFFER defaults to the current buffer."
           (setq default (evil-filter-list #'stringp default)))
         (evil-set-cursor default)
         (evil-set-cursor cursor)))))
-(put 'evil-refresh-cursor 'permanent-local-hook t)
 
 (defmacro evil-save-cursor (&rest body)
   "Save the current cursor; execute BODY; restore the cursor."
@@ -1384,12 +1352,25 @@ to reach zero). The behaviour of this functions is similar to
          (dir (if (> count 0) +1 -1)))
     (catch 'done
       (while (not (zerop count))
-        (let* ((cl (save-excursion
+        (let* ((pnt (point))
+               (cl (save-excursion
                      (and (re-search-forward end nil t dir)
+                          (or (/= pnt (point))
+                              (progn
+                                ;; zero size match, repeat search from
+                                ;; the next position
+                                (forward-char dir)
+                                (re-search-forward end nil t dir)))
                           (point))))
                (match (match-data t))
                (op (save-excursion
                      (and (re-search-forward beg cl t dir)
+                          (or (/= pnt (point))
+                              (progn
+                                ;; zero size match, repeat search from
+                                ;; the next position
+                                (forward-char dir)
+                                (re-search-forward beg cl t dir)))
                           (point)))))
           (cond
            ((and (not op) (not cl))
@@ -1471,7 +1452,7 @@ last successful match (that caused COUNT to reach zero)."
         (while
             (and (setq match
                        (re-search-forward
-                        "<\\([^/ >]+\\)[^/>]*?>\\|</\\([^>]+?\\)>"
+                        "<\\([^/ >]+\\)\\(?:[^\"/>]\\|\"[^\"]*\"\\)*?>\\|</\\([^>]+?\\)>"
                         nil t dir))
                  (cond
                   ((match-beginning op)
@@ -1505,7 +1486,7 @@ last successful match (that caused COUNT to reach zero)."
         (let* ((tag (match-string cl))
                (refwd (concat "<\\(/\\)?"
                               (regexp-quote tag)
-                              "\\(?:>\\| [^/>]*?>\\)"))
+                              "\\(?:>\\| \\(?:[^\"/>]\\|\"[^\"]*\"\\)*?>\\)"))
                (cnt 1))
           (while (and (> cnt 0) (re-search-backward refwd nil t dir))
             (setq cnt (+ cnt (if (match-beginning 1) dir (- dir)))))
@@ -3313,15 +3294,21 @@ non-nil only the first boundary is removed.  See
 `evil-start-undo-step'."
   (when evil-undo-list-pointer
     (if first-only
-        (let ((bnd buffer-undo-list)
-              (cur buffer-undo-list))
+        (let ((cnt 0)
+              (cur buffer-undo-list)
+              (bnd nil))
+          ;; find last nil
           (while (and cur (not (eq cur evil-undo-list-pointer)))
-            (when (null (cadr cur))
-              (setq bnd cur))
+            (when (null (car cur)) (setq bnd cur))
             (pop cur))
-          ;; found the first boundary, remove it
-          (when (and bnd (null (cadr bnd)))
-            (setcdr bnd (cdr (cdr bnd)))))
+          ;; remove the last nil
+          (when bnd
+            (setq cur buffer-undo-list)
+            (if (eq cur bnd)
+                (pop buffer-undo-list)
+              (while (not (eq (cdr cur) bnd))
+                (pop cur))
+              (setcdr cur (cdr bnd)))))
       (setq buffer-undo-list
             (evil-filter-list #'null buffer-undo-list evil-undo-list-pointer)))
     (setq evil-undo-list-pointer (or buffer-undo-list t))))

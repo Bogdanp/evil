@@ -713,7 +713,10 @@ for specifying the tag."
   :jump t
   (interactive "P")
   (if arg (call-interactively #'find-tag)
-    (let ((tag (thing-at-point 'symbol)))
+    (let ((tag (funcall (or find-tag-default-function
+                            (get major-mode 'find-tag-default-function)
+                            #'find-tag-default))))
+      (unless tag (user-error "No tag candidate found around point"))
       (find-tag tag))))
 
 (evil-define-motion evil-lookup ()
@@ -1803,7 +1806,7 @@ will be opened instead."
   :suppress-operator t
   (interactive
    (list (unless (and evil-this-macro defining-kbd-macro)
-           (or evil-this-register (read-char)))))
+           (or evil-this-register (evil-read-key)))))
   (cond
    ((and evil-this-macro defining-kbd-macro)
     (condition-case nil
@@ -2408,66 +2411,66 @@ The search is unbounded, i.e., the pattern is not wrapped in
         (evil-search search t t (point-min)))))))
 
 ;;; Folding
+(defun evil-fold-action (list action)
+  "Perform fold ACTION for each matching major or minor mode in LIST.
+
+ACTION will be performed for the first matching handler in LIST.  For more
+information on its features and format, see the documentation for
+`evil-fold-list'.
+
+If no matching ACTION is found in LIST, an error will signaled.
+
+Handler errors will be demoted, so a problem in one handler will (hopefully)
+not interfere with another."
+  (if (null list)
+      (user-error
+       "Folding is not supported for any of these major/minor modes")
+    (let* ((modes (caar list)))
+      (if (evil--mode-p modes)
+          (let* ((actions (cdar list))
+                 (fn      (plist-get actions action)))
+            (when fn
+              (with-demoted-errors (funcall fn))))
+        (evil-fold-action (cdr list) action)))))
+
+(defun evil--mode-p (modes)
+  "Determines whether any symbol in MODES represents the current
+buffer's major mode or any of its minors."
+  (unless (eq modes '())
+    (let ((mode (car modes)))
+      (or (eq major-mode mode)
+          (and (boundp mode) (symbol-value mode))
+          (evil--mode-p (cdr modes))))))
 
 (evil-define-command evil-toggle-fold ()
-  "Open or close a fold."
-  (when (fboundp 'hs-minor-mode)
-    (hs-minor-mode 1)
-    (with-no-warnings (hs-toggle-hiding))))
+  "Open or close a fold under point.
+See also `evil-open-fold' and `evil-close-fold'."
+  (evil-fold-action evil-fold-list :toggle))
 
 (evil-define-command evil-open-folds ()
   "Open all folds.
 See also `evil-close-folds'."
-  (when (fboundp 'hs-minor-mode)
-    (hs-minor-mode 1)
-    (with-no-warnings (hs-show-all)))
-  (when (memq major-mode '(c-mode c++-mode))
-    (when (fboundp 'hide-ifdef-mode)
-      (hide-ifdef-mode 1)
-      (with-no-warnings (show-ifdefs)))))
+  (evil-fold-action evil-fold-list :open-all))
 
 (evil-define-command evil-close-folds ()
   "Close all folds.
 See also `evil-open-folds'."
-  (when (fboundp 'hs-minor-mode)
-    (hs-minor-mode 1)
-    (with-no-warnings (hs-hide-all)))
-  (when (memq major-mode '(c-mode c++-mode))
-    (when (fboundp 'hide-ifdef-mode)
-      (hide-ifdef-mode 1)
-      (with-no-warnings (hide-ifdefs)))))
+  (evil-fold-action evil-fold-list :close-all))
 
 (evil-define-command evil-open-fold ()
-  "Open fold.
+  "Open fold at point.
 See also `evil-close-fold'."
-  (with-no-warnings
-    (cond
-     ((and (memq major-mode '(c-mode c++-mode))
-           (fboundp 'hide-ifdef-mode)
-           (hide-ifdef-mode 1)
-           (save-excursion
-             (beginning-of-line)
-             (looking-at hif-ifx-else-endif-regexp)))
-      (show-ifdef-block))
-     ((fboundp 'hs-minor-mode)
-      (hs-minor-mode 1)
-      (hs-show-block)))))
+  (evil-fold-action evil-fold-list :open))
+
+(evil-define-command evil-open-fold-rec ()
+  "Open fold at point recursively.
+See also `evil-open-fold' and `evil-close-fold'."
+  (evil-fold-action evil-fold-list :open-rec))
 
 (evil-define-command evil-close-fold ()
-  "Close fold.
+  "Close fold at point.
 See also `evil-open-fold'."
-  (with-no-warnings
-    (cond
-     ((and (memq major-mode '(c-mode c++-mode))
-           (fboundp 'hide-ifdef-mode)
-           (hide-ifdef-mode 1)
-           (save-excursion
-             (beginning-of-line)
-             (looking-at hif-ifx-else-endif-regexp)))
-      (hide-ifdef-block))
-     ((fboundp 'hs-minor-mode)
-      (hs-minor-mode 1)
-      (hs-hide-block)))))
+  (evil-fold-action evil-fold-list :close))
 
 ;;; Ex
 
@@ -2578,12 +2581,20 @@ files."
   "Switches to another buffer."
   :repeat nil
   (interactive "<b>")
-  (if buffer
-      (when (or (get-buffer buffer)
-                (y-or-n-p (format "No buffer with name \"%s\" exists. \
-Create new buffer? " buffer)))
-        (switch-to-buffer buffer))
-    (switch-to-buffer (other-buffer))))
+  (cond
+   ;; no buffer given, switch to "other" buffer
+   ((null buffer) (switch-to-buffer (other-buffer)))
+   ;; we are given the name of an existing buffer
+   ((get-buffer buffer) (switch-to-buffer buffer))
+   ;; try to complete the buffer
+   ((let ((all-buffers (internal-complete-buffer buffer nil t)))
+      (when (= (length all-buffers) 1)
+        (switch-to-buffer (car all-buffers)))))
+   (t
+    (when (y-or-n-p
+           (format "No buffer with name \"%s\" exists. Create new buffer? "
+                   buffer))
+      (switch-to-buffer buffer)))))
 
 (evil-define-command evil-next-buffer (&optional count)
   "Goes to the `count'-th next buffer in the buffer list."
@@ -2721,9 +2732,23 @@ the previous shell command is executed instead."
       (if previous (user-error "No previous shell command")
         (user-error "No shell command")))
      (evil-ex-range
-      (shell-command-on-region beg end command nil t)
-      (goto-char beg)
-      (evil-first-non-blank))
+      (if (not evil-display-shell-error-in-message)
+          (shell-command-on-region beg end command nil t)
+        (let ((output-buffer (generate-new-buffer " *temp*"))
+              (error-buffer (generate-new-buffer " *temp*")))
+          (unwind-protect
+              (if (zerop (shell-command-on-region beg end
+                                                  command
+                                                  output-buffer nil
+                                                  error-buffer))
+                  (progn
+                    (delete-region beg end)
+                    (insert-buffer-substring output-buffer)
+                    (goto-char beg)
+                    (evil-first-non-blank))
+                (display-message-or-buffer error-buffer))
+            (kill-buffer output-buffer)
+            (kill-buffer error-buffer)))))
      (t
       (shell-command command)))))
 
@@ -3235,6 +3260,46 @@ Default position is the beginning of the buffer."
     (if file
         (message "\"%s\" %d %slines --%s--" file nlines readonly perc)
       (message "%d lines --%s--" nlines perc))))
+
+(evil-define-operator evil-ex-sort (beg end &optional options reverse)
+  "The Ex sort command.
+\[BEG,END]sort[!] [i][u]
+The following additional options are supported:
+
+  * i   ignore case
+  * u   remove duplicate lines
+
+The 'bang' argument means to sort in reverse order."
+  :motion mark-whole-buffer
+  :move-point nil
+  (interactive "<r><a><!>")
+  (let ((beg (copy-marker beg))
+        (end (copy-marker end))
+        sort-fold-case uniq)
+    (dolist (opt (append options nil))
+      (cond
+       ((eq opt ?i) (setq sort-fold-case t))
+       ((eq opt ?u) (setq uniq t))
+       (t (user-error "Unsupported sort option: %c" opt))))
+    (sort-lines reverse beg end)
+    (when uniq
+      (let (line prev-line)
+        (goto-char beg)
+        (while (and (< (point) end) (not (eobp)))
+          (setq line (buffer-substring-no-properties
+                      (line-beginning-position)
+                      (line-end-position)))
+          (if (and (stringp prev-line)
+                   (eq t (compare-strings line nil nil
+                                          prev-line nil nil
+                                          sort-fold-case)))
+              (delete-region (progn (forward-line 0) (point))
+                             (progn (forward-line 1) (point)))
+            (setq prev-line line)
+            (forward-line 1)))))
+    (goto-char beg)
+    (set-marker beg nil)
+    (set-marker end nil)))
 
 ;;; Window navigation
 
