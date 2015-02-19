@@ -1498,56 +1498,65 @@ but doesn't insert or remove any spaces."
   :motion evil-line
   (evil-indent beg end))
 
-(evil-define-operator evil-shift-left (beg end &optional count)
+(evil-define-operator evil-shift-left (beg end &optional count preserve-empty)
   "Shift text from BEG to END to the left.
 The text is shifted to the nearest multiple of `evil-shift-width'
 \(the rounding can be disabled by setting `evil-shift-round').
+If PRESERVE-EMPTY is non-nil, lines that contain only spaces are
+indented, too, otherwise they are ignored.  The relative column
+of point is preserved if this function is not called
+interactively. Otherwise, if the function is called as an
+operator, point is moved to the first non-blank character.
 See also `evil-shift-right'."
   :type line
   (interactive "<r><vc>")
-  (let ((beg (set-marker (make-marker) beg))
-        (end (set-marker (make-marker) end)))
-    (dotimes (i (or count 1))
-      (if (not evil-shift-round)
-          (indent-rigidly beg end (- evil-shift-width))
-        (let* ((indent
-                (save-excursion
-                  (goto-char beg)
-                  (evil-move-beginning-of-line)
-                  ;; ignore blank lines
-                  (while (and (< (point) end) (looking-at "[ \t]*$"))
-                    (forward-line))
-                  (if (> (point) end) 0
-                    (current-indentation))))
-               (offset (1+ (mod (1- indent) evil-shift-width))))
-          (indent-rigidly beg end (- offset)))))
-    (set-marker beg nil)
-    (set-marker end nil)))
+  (evil-shift-right beg end (- (or count 1)) preserve-empty))
 
-(evil-define-operator evil-shift-right (beg end &optional count)
+(evil-define-operator evil-shift-right (beg end &optional count preserve-empty)
   "Shift text from BEG to END to the right.
 The text is shifted to the nearest multiple of `evil-shift-width'
 \(the rounding can be disabled by setting `evil-shift-round').
+If PRESERVE-EMPTY is non-nil, lines that contain only spaces are
+indented, too, otherwise they are ignored.  The relative column
+of point is preserved if this function is not called
+interactively. Otherwise, if the function is called as an
+operator, point is moved to the first non-blank character.
 See also `evil-shift-left'."
   :type line
   (interactive "<r><vc>")
+  (setq count (or count 1))
   (let ((beg (set-marker (make-marker) beg))
-        (end (set-marker (make-marker) end)))
-    (dotimes (i (or count 1))
-      (if (not evil-shift-round)
-          (indent-rigidly beg end evil-shift-width)
-        (let* ((indent
-                (save-excursion
-                  (goto-char beg)
-                  (evil-move-beginning-of-line nil)
-                  (while (and (< (point) end) (looking-at "[ \t]*$"))
-                    (forward-line))
-                  (if (> (point) end) 0
-                    (current-indentation))))
-               (offset (- evil-shift-width (mod indent evil-shift-width))))
-          (indent-rigidly beg end offset))))
-    (set-marker beg nil)
-    (set-marker end nil)))
+        (end (set-marker (make-marker) end))
+        (pnt-indent (current-column))
+        first-shift) ; shift of first line
+    (save-excursion
+      (goto-char beg)
+      (while (< (point) end)
+        (let* ((indent (current-indentation))
+               (new-indent
+                (max 0
+                     (if (not evil-shift-round)
+                         (+ indent (* count evil-shift-width))
+                       (* (+ (/ indent evil-shift-width)
+                             count
+                             (cond
+                              ((> count 0) 0)
+                              ((zerop (mod indent evil-shift-width)) 0)
+                              (t 1)))
+                          evil-shift-width)))))
+          (unless first-shift
+            (setq first-shift (- new-indent indent)))
+          (when (or preserve-empty
+                    (save-excursion
+                      (skip-chars-forward " \t")
+                      (not (eolp))))
+            (indent-to new-indent 0))
+          (delete-region (point) (progn (skip-chars-forward " \t") (point)))
+          (forward-line 1))))
+    ;; assuming that point is in the first line, adjust its position
+    (if (called-interactively-p 'any)
+        (evil-first-non-blank)
+      (move-to-column (+ pnt-indent first-shift)))))
 
 (evil-define-command evil-shift-right-line (count)
   "Shift the current line COUNT times to the right.
@@ -1555,7 +1564,7 @@ The text is shifted to the nearest multiple of
 `evil-shift-width'. Like `evil-shift-right' but always works on
 the current line."
   (interactive "<c>")
-  (evil-shift-right (line-beginning-position) (line-end-position) count))
+  (evil-shift-right (line-beginning-position) (line-beginning-position 2) count t))
 
 (evil-define-command evil-shift-left-line (count)
   "Shift the current line COUNT times to the leeft.
@@ -1563,7 +1572,7 @@ The text is shifted to the nearest multiple of
 `evil-shift-width'. Like `evil-shift-leeft' but always works on
 the current line."
   (interactive "<c>")
-  (evil-shift-left (line-beginning-position) (line-end-position) count))
+  (evil-shift-left (line-beginning-position) (line-beginning-position 2) count t))
 
 (evil-define-operator evil-align-left (beg end type &optional width)
   "Right-align lines in the region at WIDTH columns.
@@ -1846,11 +1855,14 @@ when called interactively."
            register (or evil-this-register (read-char)))
      (cond
       ((eq register ?@)
-       (setq macro last-kbd-macro))
+       (unless evil-last-register
+         (user-error "No previously executed keyboard macro."))
+       (setq macro (evil-get-register evil-last-register t)))
       ((eq register ?:)
        (setq macro (lambda () (evil-ex-repeat nil))))
       (t
-       (setq macro (evil-get-register register t))))
+       (setq macro (evil-get-register register t)
+             evil-last-register register)))
      (list count macro)))
   (cond
    ((functionp macro)
@@ -2576,6 +2588,20 @@ The same as `buffer-menu', but shows only buffers visiting
 files."
   :repeat nil
   (buffer-menu 1))
+
+(evil-define-command evil-goto-error (count)
+  "Go to error number COUNT.
+
+If no COUNT supplied, move to the current error.
+
+Acts like `first-error' other than when given no counts, goes
+to the current error instead of the first, like in Vim's :cc
+command."
+  :repeat nil
+  (interactive "P")
+  (if count
+      (first-error (if (eql 0 count) 1 count))
+    (next-error 0)))
 
 (evil-define-command evil-buffer (buffer)
   "Switches to another buffer."
@@ -3347,6 +3373,29 @@ TREE is the tree layout to be restored."
    (t
     (set-window-buffer win tree))))
 
+(defun evil-alternate-buffer (&optional window)
+  "Return the last buffer WINDOW has displayed other than the
+current one (equivalent to Vim's alternate buffer).
+
+Returns the first item in `window-prev-buffers' that isn't
+`window-buffer' of WINDOW."
+  ;; If the last buffer visitied has been killed, then `window-prev-buffers'
+  ;; returns a list with `current-buffer' at the head, we account for this
+  ;; possibility.
+  (let* ((prev-buffers (window-prev-buffers))
+         (head (car prev-buffers)))
+    (if (eq (car head) (window-buffer window))
+        (cadr prev-buffers)
+      head)))
+
+(evil-define-command evil-switch-to-windows-last-buffer ()
+  "Switch to current windows last open buffer."
+  :repeat nil
+  (let ((previous-place (evil-alternate-buffer)))
+    (when previous-place
+      (switch-to-buffer (car previous-place))
+      (goto-char (car (last previous-place))))))
+
 (evil-define-command evil-window-delete ()
   "Deletes the current window.
 If `evil-auto-balance-windows' is non-nil then all children of
@@ -3362,12 +3411,14 @@ the deleted window's parent window are rebalanced."
 
 (evil-define-command evil-window-split (&optional count file)
   "Splits the current window horizontally, COUNT lines height,
-editing a certain FILE. If COUNT and `evil-auto-balance-windows'
-are both non-nil then all children of the parent of the splitted
-window are rebalanced."
+editing a certain FILE. The new window will be created below
+when `evil-split-window-below' is non-nil. If COUNT and
+`evil-auto-balance-windows' are both non-nil then all children
+of the parent of the splitted window are rebalanced."
   :repeat nil
   (interactive "P<f>")
-  (split-window (selected-window) count)
+  (split-window (selected-window) count
+                (if evil-split-window-below 'above 'below))
   (when (and (not count) evil-auto-balance-windows)
     (balance-windows (window-parent)))
   (when file
@@ -3375,12 +3426,14 @@ window are rebalanced."
 
 (evil-define-command evil-window-vsplit (&optional count file)
   "Splits the current window vertically, COUNT columns width,
-editing a certain FILE. If COUNT and `evil-auto-balance-windows'
-are both non-nil then all children of the parent of the splitted
-window are rebalanced."
+editing a certain FILE. The new window will be created to the
+right when `evil-vsplit-window-right' is non-nil. If COUNT and
+`evil-auto-balance-windows'are both non-nil then all children
+of the parent of the splitted window are rebalanced."
   :repeat nil
   (interactive "P<f>")
-  (split-window (selected-window) count t)
+  (split-window (selected-window) count
+                (if evil-vsplit-window-right 'left 'right))
   (when (and (not count) evil-auto-balance-windows)
     (balance-windows (window-parent)))
   (when file
@@ -3495,7 +3548,8 @@ top-left."
 and opens a new buffer or edits a certain FILE."
   :repeat nil
   (interactive "P<f>")
-  (split-window (selected-window) count)
+  (split-window (selected-window) count
+                (if evil-split-window-below 'above 'below))
   (when (and (not count) evil-auto-balance-windows)
     (balance-windows (window-parent)))
   (if file
@@ -3510,7 +3564,8 @@ and opens a new buffer or edits a certain FILE."
 and opens a new buffer name or edits a certain FILE."
   :repeat nil
   (interactive "P<f>")
-  (split-window (selected-window) count t)
+  (split-window (selected-window) count
+                (if evil-vsplit-window-right 'left 'right))
   (when (and (not count) evil-auto-balance-windows)
     (balance-windows (window-parent)))
   (if file
