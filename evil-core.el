@@ -2,7 +2,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.1.2
+;; Version: 1.1.3
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -1101,7 +1101,7 @@ cursor, or a list of the above." name))
        (defun ,toggle (&optional arg)
          ,(format "Enable %s. Disable with negative ARG.
 If ARG is nil, don't display a message in the echo area.%s" name doc)
-         (interactive "p")
+         (interactive)
          (cond
           ((and (numberp arg) (< arg 1))
            (setq evil-previous-state evil-state

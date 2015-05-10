@@ -2,7 +2,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.1.2
+;; Version: 1.1.3
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -35,6 +35,7 @@
 (declare-function evil-visual-state-p "evil-states")
 (declare-function evil-visual-restore "evil-states")
 (declare-function evil-motion-state "evil-states")
+(declare-function evil-ex-p "evil-ex")
 
 ;;; Compatibility for Emacs 23
 (unless (fboundp 'deactivate-input-method)
