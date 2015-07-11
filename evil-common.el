@@ -1991,7 +1991,7 @@ POS defaults to point."
       (setq evil-jump-list nil)
       (push-mark pos t))))
 
-(defvar bp-clipboard--last-value nil)
+(defvar bp-clipboard--last-value "")
 
 (defun bp-clipboard-value ()
   (let ((v (x-selection-value)))
