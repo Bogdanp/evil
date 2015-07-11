@@ -2,7 +2,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.1.6
+;; Version: 1.2.1
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -976,6 +976,7 @@ Like `move-end-of-line', but retains the goal column."
 This behavior is contingent on the variable `evil-move-cursor-back';
 use the FORCE parameter to override it."
   (when (and (eolp)
+             (not evil-move-beyond-eol)
              (not (bolp))
              (= (point)
                 (save-excursion
@@ -1326,6 +1327,22 @@ Signals an error at buffer boundaries unless NOERROR is non-nil."
              ;; Maybe we should just `ding'?
              (signal (car err) (cdr err))))))))))
 
+(defun evil-forward-syntax (syntax &optional count)
+  "Move point to the end or beginning of a sequence of characters in
+SYNTAX.
+Stop on reaching a character not in SYNTAX."
+  (let ((notsyntax (if (= (aref syntax 0) ?^)
+                       (substring syntax 1)
+                     (concat "^" syntax))))
+    (evil-motion-loop (dir (or count 1))
+      (cond
+       ((< dir 0)
+        (skip-syntax-backward notsyntax)
+        (skip-syntax-backward syntax))
+       (t
+        (skip-syntax-forward notsyntax)
+        (skip-syntax-forward syntax))))))
+
 (defun evil-forward-chars (chars &optional count)
   "Move point to the end or beginning of a sequence of CHARS.
 CHARS is a character set as inside [...] in a regular expression."
@@ -1635,10 +1652,18 @@ WORD is a sequence of non-whitespace characters
 Moves point COUNT symbols forward or (- COUNT) symbols backward
 if COUNT is negative. Point is placed after the end of the
 symbol (if forward) or at the first character of the symbol (if
-backward). The boundaries of a symbol are determined by
-`forward-symbol'."
-  (evil-motion-loop (dir (or count 1))
-    (forward-symbol dir)))
+backward). A symbol is either determined by `forward-symbol', or
+is a sequence of characters not in the word, symbol or whitespace
+syntax classes."
+  (evil-forward-nearest
+   count
+   #'(lambda (&optional cnt)
+       (evil-forward-syntax "^w_->" cnt))
+   #'(lambda (&optional cnt)
+       (let ((pnt (point)))
+         (forward-symbol cnt)
+         (if (= pnt (point)) cnt 0)))
+   #'forward-evil-empty-line))
 
 (defun forward-evil-defun (&optional count)
   "Move forward COUNT defuns.
@@ -1966,13 +1991,6 @@ POS defaults to point."
       (setq evil-jump-list nil)
       (push-mark pos t))))
 
-(setq clipboard:last-value nil)
-(defun get-clipboard-value ()
-  (let ((v (x-selection-value)))
-    (if v
-        (setq clipboard:last-value v)
-      clipboard:last-value)))
-
 (defun evil-get-register (register &optional noerror)
   "Return contents of REGISTER.
 Signal an error if empty, unless NOERROR is non-nil.
@@ -2005,7 +2023,7 @@ The following special registers are supported.
              ((eq register ?*)
               (x-get-selection-value))
              ((eq register ?+)
-              (get-clipboard-value))
+              (x-get-clipboard))
              ((eq register ?\C-W)
               (unless (evil-ex-p)
                 (user-error "Register <C-w> only available in ex state"))
@@ -2086,10 +2104,7 @@ register instead of replacing its content."
    ((eq register ?*)
     (x-set-selection 'PRIMARY text))
    ((eq register ?+)
-    (progn
-      (setq clipboard:last-value text)
-      (x-set-selection 'CLIPBOARD text)
-      (x-select-text text)))
+    (x-set-selection 'CLIPBOARD text))
    ((eq register ?-)
     (setq evil-last-small-deletion text))
    ((eq register ?_) ; the black hole register
