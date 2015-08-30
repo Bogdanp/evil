@@ -3,7 +3,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.2.1
+;; Version: 1.2.3
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -5252,7 +5252,13 @@ Below some empty line."))
     (evil-test-buffer
       "x[x]xx ) yyyyy () zzzz"
       (should-error (execute-kbd-macro "%"))
-      "x[x]xx ) yyyyy () zzzz")))
+      "x[x]xx ) yyyyy () zzzz"))
+
+  (ert-info ("At the end of the line")
+    (evil-test-buffer
+      "[p]ublic void foo(String bar) {\n   blabla;\n}\n"
+      ("v$%")
+      "public void foo(String bar) {\n   blabla;\n[}]\n")))
 
 (ert-deftest evil-test-unmatched-paren ()
   "Test `evil-previous-open-paren' and `evil-next-close-paren'"
