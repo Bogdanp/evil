@@ -1991,19 +1991,6 @@ POS defaults to point."
       (setq evil-jump-list nil)
       (push-mark pos t))))
 
-(defvar bp-clipboard--last-value "")
-
-(defun bp-clipboard-value ()
-  (let ((v (x-selection-value)))
-    (if v
-        (setq bp-clipboard--last-value v)
-      bp-clipboard--last-value)))
-
-(defun bp-set-clipboard-value (value)
-  (setq bp-clipboard--last-value value)
-  (x-set-selection 'CLIPBOARD value)
-  (x-select-text value))
-
 (defun evil-get-register (register &optional noerror)
   "Return contents of REGISTER.
 Signal an error if empty, unless NOERROR is non-nil.
@@ -2034,9 +2021,9 @@ The following special registers are supported.
                 (and (< reg (length kill-ring))
                      (current-kill reg t))))
              ((eq register ?*)
-              (x-get-selection-value))
+              (ns-get-selection-internal 'PRIMARY))
              ((eq register ?+)
-              (bp-clipboard-value))
+              (ns-get-selection-internal 'CLIPBOARD))
              ((eq register ?\C-W)
               (unless (evil-ex-p)
                 (user-error "Register <C-w> only available in ex state"))
@@ -2115,9 +2102,9 @@ register instead of replacing its content."
         (current-kill (- register ?1))
         (setcar kill-ring-yank-pointer text))))
    ((eq register ?*)
-    (x-set-selection 'PRIMARY text))
+    (ns-store-selection-internal 'PRIMARY text))
    ((eq register ?+)
-    (bp-set-clipboard-value text))
+    (ns-store-selection-internal 'CLIPBOARD text))
    ((eq register ?-)
     (setq evil-last-small-deletion text))
    ((eq register ?_) ; the black hole register
