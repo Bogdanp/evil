@@ -313,10 +313,11 @@ otherwise exit Visual state."
   (let ((buf (or buffer (current-buffer))))
     (when (buffer-live-p buf)
       (with-current-buffer buf
+        ;; XXX: Fix copy-on-motion-behavior by disabling this
+        ;; altogether on NextStep.
         (when (and (evil-visual-state-p)
                    (fboundp 'x-select-text)
-                   (or (not (boundp 'ns-initialized))
-                       (with-no-warnings ns-initialized))
+                   (not (boundp 'ns-initialized))
                    (not (eq evil-visual-selection 'block)))
           (x-select-text (buffer-substring-no-properties
                           evil-visual-beginning
