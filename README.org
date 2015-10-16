@@ -1,0 +1,17 @@
+* Evil mode
+
+This is a slightly modified version of [[https://bitbucket.org/lyro/evil/wiki/Home][evil-mode]] in an attempt to make
+it behave better on OS X.
+
+** Differences from upstream
+*** Clipboard handling
+    =ns-{get,set}-selection-internal= are used for getting and setting
+    the =*= and =+= registers in order to ensure consistent clipboard
+    handling on OS X like you would get in standard VIM.  The default
+    behavior of Evil here generally breaks in surprising ways due to
+    =x-{get,set}-selection=.
+
+*** Copy-on-visual-motion bug fix
+    =x-select-text= always copies the selection to the clipboard on
+    NextStep, the fix here prevents =evil-visual-update-x-selection=
+    from calling =x-select-text= on those systems.
