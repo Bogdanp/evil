@@ -115,6 +115,8 @@
   (cond
    ((evil-disabled-buffer-p))
    (evil-local-mode
+    (setq-local interprogram-cut-function nil)
+    (setq-local interprogram-paste-function nil)
     (setq emulation-mode-map-alists
           (evil-concat-lists '(evil-mode-map-alist)
                              emulation-mode-map-alists))
