@@ -1,7 +1,8 @@
 * Evil mode
 
 This is a slightly modified version of [[https://bitbucket.org/lyro/evil/wiki/Home][evil-mode]] in an attempt to make
-it behave better on OS X.
+it behave better on OS X.  These changes are incompatible with non OS
+X systems as well as the command line version of Emacs.
 
 ** Differences from upstream
 *** Clipboard handling
