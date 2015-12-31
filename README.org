@@ -1,19 +1,16 @@
 * Evil mode
 
 This is a slightly modified version of [[https://bitbucket.org/lyro/evil/wiki/Home][evil-mode]] in an attempt to make
-it behave better on OS X.  These changes are incompatible with non OS
-X systems as well as the command line version of Emacs.
+it behave better when using the graphical Emacs Mac port.  These
+changes are incompatible with non OS X systems as well as the command
+line version of Emacs.
 
 ** Differences from upstream
 *** Clipboard handling
-    =ns-{get,set}-selection-internal= are used for getting and setting
-    the =*= and =+= registers in order to ensure consistent clipboard
-    handling on OS X like you would get in standard VIM.  The default
-    behavior of Evil here generally breaks in surprising ways due to
-    =x-{get,set}-selection=.  The interprogram cut and paste functions
-    are disabled in =evil-local-mode=.
+    =x-selection-value-internal= is used to get clipboard data and the
+    interprogram cut and paste functions are disabled in =evil-local-mode=.
 
 *** Copy-on-visual-motion bug fix
     =x-select-text= always copies the selection to the clipboard on
-    NextStep, the fix here prevents =evil-visual-update-x-selection=
-    from calling =x-select-text= on those systems.
+    NextStep and the Mac port.  The fix here prevents =x-select-text=
+    from being called inside =evil-visual-update-x-selection=.
