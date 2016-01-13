@@ -3,7 +3,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.2.7
+;; Version: 1.2.8
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -974,7 +974,14 @@ de[f]
       "[(]let (var)\n  test)\n"
       (emacs-lisp-mode)
       ("odo-it" [escape])
-      "(let (var)\n  do-i[t]\n  test)\n")))
+      "(let (var)\n  do-i[t]\n  test)\n"))
+  (let ((evil-auto-indent t))
+    (ert-info ("With count")
+      (evil-test-buffer
+        "[(]and a\n     c)\n"
+        (emacs-lisp-mode)
+        ("3ob" [escape])
+        "(and a\n     b\n     b\n     [b]\n     c)\n"))))
 
 (ert-deftest evil-test-open-below-folded ()
   "Test `evil-open-below' on folded lines"
@@ -3007,6 +3014,31 @@ Below some empty line"
       ";; This buffer is for notes you don't want to [s]ave."
       (should-error (execute-kbd-macro "j"))
       (should-error (execute-kbd-macro "42j")))))
+
+(ert-deftest evil-test-preserve-column ()
+  "Test `evil-previous-line' and `evil-next-line' preserve the column."
+  :tags '(evil motion)
+  (ert-info ("Simple")
+    (evil-test-buffer
+      "ab[c]\nabcdef\n\nabcd\n"
+      ("j")
+      "abc\nab[c]def\n\nabcd\n")
+    (evil-test-buffer
+      "ab[c]\nabcdef\n\nabcd\n"
+      ("jj")
+      "abc\nabcdef\n[\n]abcd\n")
+    (evil-test-buffer
+      "ab[c]\nabcdef\n\nabcd\n"
+      ("jjj")
+      "abc\nabcdef\n\nab[c]d\n")
+    (evil-test-buffer
+      "ab[c]\nabcdef\n\nabcd\n"
+      ("jjjk")
+      "abc\nabcdef\n[\n]abcd\n")
+    (evil-test-buffer
+      "ab[c]\nabcdef\n\nabcd\n"
+      ("jjjkk")
+      "abc\nab[c]def\n\nabcd\n")))
 
 (ert-deftest evil-test-beginning-of-line ()
   "Test `evil-beginning-of-line' motion"
@@ -6217,7 +6249,83 @@ Below some empty line."))
     (evil-test-buffer
       "(([\"]\"))\n"
       ("dab")
-      "([)]\n")))
+      "([)]\n"))
+  (ert-info ("Enlarge to smallest complete surrounding")
+    (evil-test-buffer
+      "for (auto i : vector) {
+  if (c<ond) {
+    do_[s]>omething();
+  }
+}"
+      ("i}")
+      "for (auto i : vector) {<
+  if (cond) {
+    do_something();
+  }[\n]>}")))
+
+(ert-deftest evil-test-forces-linewise-text-objects ()
+  "Test `evil-text-object-change-visual-type' option."
+  :tags '(evil text-object)
+  (let ((evil-text-object-change-visual-type t))
+    (ert-info ("Change visual type")
+      (evil-test-buffer
+        "  function(opts) {
+    this.var1 = something();
+    [t]his.var2 = something_else();
+    return something_nasty();
+  }
+"
+        ("Vi}")
+        "  function(opts) {<
+    this.var1 = something();
+    this.var2 = something_else();
+    return something_nasty();
+ [ ]>}
+"
+        (should (eq (evil-visual-type) 'inclusive)))))
+  (let ((evil-text-object-change-visual-type nil))
+    (ert-info ("Change visual type keeping linewise")
+      (evil-test-buffer
+        "  function(opts) {
+    this.var1 = something();
+    [t]his.var2 = something_else();
+    return something_nasty();
+  }
+"
+        ("Vi}")
+        "  function(opts) {
+<    this.var1 = something();
+    this.var2 = something_else();
+    return something_nasty();\n>  }
+"
+        (should (eq (evil-visual-type) 'line)))))
+  (let ((evil-text-object-change-visual-type nil))
+    (ert-info ("Linewise outer block")
+      (evil-test-buffer
+        "  function(opts) {
+    this.var1 = something();
+    [t]his.var2 = something_else();
+    return something_nasty();
+  }
+"
+        ("Va}")
+        "<  function(opts) {
+    this.var1 = something();
+    this.var2 = something_else();
+    return something_nasty();
+  }
+>"
+        (should (eq (evil-visual-type) 'line)))))
+  (ert-info ("Forced motion type should change text object type")
+    (evil-test-buffer
+      "for (int i=0; i<10; i++) {
+  if ([c]ond) {
+    do_something();
+  }
+}"
+      ("dVi}")
+      "for (int i=0; i<10; i++) {
+\[}]")))
 
 (ert-deftest evil-test-tag-objects ()
   "Test `evil-inner-tag', etc."
