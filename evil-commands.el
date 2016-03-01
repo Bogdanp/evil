@@ -869,6 +869,7 @@ Scrolls half the screen if `evil-ud-scroll-count' equals 0."
             (win-end (window-end nil 'update)))
         (when (= win-end (point-max))
           (scroll-down (- (evil-num-visible-lines)
+                          scroll-margin
                           (evil-count-lines win-beg win-end)))))
       (when (= 0 (count-lines p (point)))
         (signal 'end-of-buffer nil)))))
@@ -880,7 +881,12 @@ Scrolls half the screen if `evil-ud-scroll-count' equals 0."
   (interactive "p")
   (evil-save-column
     (dotimes (i count)
-      (scroll-down nil))))
+      (condition-case err
+          (scroll-down nil)
+        (beginning-of-buffer
+         (if (and (bobp) (zerop i))
+             (signal (car err) (cdr err))
+           (goto-char (point-min))))))))
 
 (evil-define-command evil-scroll-page-down (count)
   "Scrolls the window COUNT pages downwards."
@@ -889,7 +895,12 @@ Scrolls half the screen if `evil-ud-scroll-count' equals 0."
   (interactive "p")
   (evil-save-column
     (dotimes (i count)
-      (scroll-up nil))))
+      (condition-case err
+          (scroll-up nil)
+        (end-of-buffer
+         (if (and (eobp) (zerop i))
+             (signal (car err) (cdr err))
+           (goto-char (point-max))))))))
 
 (evil-define-command evil-scroll-line-to-top (count)
   "Scrolls line number COUNT (or the cursor line) to the top of the window."
@@ -2952,7 +2963,7 @@ corresponding to the characters of this string are shown."
 
 (defun evil--show-marks-select-action (entry)
   (kill-buffer)
-  (switch-to-buffer (elt entry 3))
+  (switch-to-buffer (car (elt entry 3)))
   (evil-goto-mark (string-to-char (elt entry 0))))
 
 (eval-when-compile (require 'ffap))
