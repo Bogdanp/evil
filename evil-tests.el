@@ -1242,6 +1242,24 @@ This buffer is for notes")))
     ("^")
     "xxxline 1\nline 2\nyyyline 3\n[x]xxline 4"))
 
+(ert-deftest evil-test-repeat-quoted-insert ()
+  "Test whether `quoted-insert' can be repeated."
+  (ert-info ("Insert C-v")
+    (evil-test-buffer
+      "lin[e] 1\nline 2\nline 3\n"
+      ("i\C-v\C-v" [escape])
+      "lin[]e 1\nline 2\nline 3\n"))
+  (ert-info ("Insert ESC")
+    (evil-test-buffer
+      "lin[e] 1\nline 2\nline 3\n"
+      ("i\C-v" [escape escape])
+      "lin[]e 1\nline 2\nline 3\n"))
+  (ert-info ("Block insert C-v")
+    (evil-test-buffer
+      "lin[e] 1\nline 2\nline 3\n"
+      ("gg\C-vGI\C-v\C-v" [escape])
+      "[]line 1\nline 2\nline 3\n")))
+
 (ert-deftest evil-test-insert-vcount ()
   "Test `evil-insert' with vertical repeating"
   :tags '(evil repeat)
@@ -6261,7 +6279,16 @@ Below some empty line."))
       "for (auto i : vector) {<
   if (cond) {
     do_something();
-  }[\n]>}")))
+  }[\n]>}"))
+  (ert-info ("Operator on empty parentheses")
+    (evil-test-buffer
+      "a([(]))b"
+      ("cibx" [escape])
+      "a(([x]))b")
+    (evil-test-buffer
+      "a(([)])b"
+      ("cibx" [escape])
+      "a(([x]))b")))
 
 (ert-deftest evil-test-forces-linewise-text-objects ()
   "Test `evil-text-object-change-visual-type' option."
