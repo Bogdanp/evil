@@ -3,7 +3,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.2.10
+;; Version: 1.2.12
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -580,6 +580,7 @@ If STATE is nil, Evil is disabled in the buffer."
 (defcustom evil-emacs-state-modes
   '(archive-mode
     bbdb-mode
+    biblio-selection-mode
     bookmark-bmenu-mode
     bookmark-edit-annotation-mode
     browse-kill-ring-mode
@@ -609,6 +610,7 @@ If STATE is nil, Evil is disabled in the buffer."
     emms-mark-mode
     emms-metaplaylist-mode
     emms-playlist-mode
+    ess-help-mode
     etags-select-mode
     fj-mode
     gc-issues-mode
@@ -1170,11 +1172,17 @@ SYMBOL is made permanent buffer local."
      (make-variable-buffer-local ',symbol)
      (put ',symbol 'permanent-local t)))
 
-(evil-define-local-var evil-ud-scroll-count 0
+(evil-define-local-var evil-scroll-count 0
   "Holds last used prefix for `evil-scroll-up'
 and `evil-scroll-down'.
 Determines how many lines should be scrolled.
 Default value is 0 - scroll half the screen.")
+
+(evil-define-local-var evil-scroll-line-count 1
+  "Holds last used prefix for `evil-scroll-line-up'
+and `evil-scroll-line-down'.
+Determines how many lines should be scrolled.
+Default value is 1 line.")
 
 (evil-define-local-var evil-state nil
   "The current Evil state.
@@ -1314,8 +1322,8 @@ Using `evil-with-restriction' stores the previous values of
     (?\) . evil-forward-sentence)
     (?{ . evil-backward-paragraph)
     (?} . evil-forward-paragraph)
-    (?' . evil-jump-backward)
-    (?` . evil-jump-backward)
+    (?' . evil-jump-backward-swap)
+    (?` . evil-jump-backward-swap)
     (?< . evil-visual-beginning)
     (?> . evil-visual-goto-end)
     (?. . (lambda ()
@@ -1551,6 +1559,13 @@ Elements have the form (NAME . FUNCTION).")
 (defvar evil-visual-x-select-timeout 0.1
   "Time in seconds for the update of the X selection.")
 
+(declare-function origami-open-all-nodes "origami.el")
+(declare-function origami-close-all-nodes "origami.el")
+(declare-function origami-toggle-node "origami.el")
+(declare-function origami-open-node "origami.el")
+(declare-function origami-open-node-recursively "origami.el")
+(declare-function origami-close-node "origami.el")
+
 (defvar evil-fold-list
   `(((hs-minor-mode)
      :open-all   hs-show-all
@@ -1579,7 +1594,14 @@ Elements have the form (NAME . FUNCTION).")
                       (show-entry)
                       (show-children)))
      :open-rec   show-subtree
-     :close      hide-subtree))
+     :close      hide-subtree)
+    ((origami-mode)
+     :open-all   ,(lambda () (origami-open-all-nodes (current-buffer)))
+     :close-all  ,(lambda () (origami-close-all-nodes (current-buffer)))
+     :toggle     ,(lambda () (origami-toggle-node (current-buffer) (point)))
+     :open       ,(lambda () (origami-open-node (current-buffer) (point)))
+     :open-rec   ,(lambda () (origami-open-node-recursively (current-buffer) (point)))
+     :close      ,(lambda () (origami-close-node (current-buffer) (point)))))
   "Actions to be performed for various folding operations.
 
 The value should be a list of fold handlers, were a fold handler has
@@ -1782,7 +1804,7 @@ Otherwise the previous command is assumed as substitute.")
           (goto-char (point-min))
           (buffer-substring (point-min) (line-end-position)))
          ;; no repo, use plain version
-         (t "1.2.10")))))
+         (t "1.2.12")))))
   "The current version of Evil")
 
 (defun evil-version ()
