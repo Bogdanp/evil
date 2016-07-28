@@ -7,7 +7,7 @@ line version of Emacs.
 
 ** Differences from upstream
 *** Clipboard handling
-    =x-selection-value-internal= is used to get clipboard data and the
+    =gui--selection-value-internal= is used to get clipboard data and the
     interprogram cut and paste functions are disabled in =evil-local-mode=.
 
 *** Copy-on-visual-motion bug fix
