@@ -3,7 +3,7 @@
 ;; Author: Vegard Øye <vegard_oye at hotmail.com>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.2.12
+;; Version: 1.2.13
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -353,16 +353,12 @@ otherwise exit Visual state."
   (let ((buf (or buffer (current-buffer))))
     (when (buffer-live-p buf)
       (with-current-buffer buf
-        ;; Fix copy-on-motion-behavior on the Mac port by disabling
-        ;; this altogether.
-        (when (and nil
-                   (evil-visual-state-p)
-                   (fboundp 'x-select-text)
-                   (not (boundp 'ns-initialized))
+        (when (and (evil-visual-state-p)
+                   (display-selections-p)
                    (not (eq evil-visual-selection 'block)))
-          (x-select-text (buffer-substring-no-properties
-                          evil-visual-beginning
-                          evil-visual-end)))))))
+          (evil-set-selection 'PRIMARY (buffer-substring-no-properties
+                                        evil-visual-beginning
+                                        evil-visual-end)))))))
 
 (defun evil-visual-activate-hook (&optional command)
   "Enable Visual state if the region is activated."
@@ -657,7 +653,7 @@ Reuse overlays where possible to prevent flicker."
             (setq before
                   (propertize
                    (make-string
-                    (- beg-col (current-column)) ?\ )
+                    (- beg-col (current-column)) ?\s)
                    'face
                    (or (get-text-property (1- (point)) 'face)
                        'default))))
@@ -674,7 +670,7 @@ Reuse overlays where possible to prevent flicker."
                     (if (= (point) row-beg)
                         (- end-col beg-col)
                       (- end-col (current-column)))
-                    ?\ ) 'face 'region))
+                    ?\s) 'face 'region))
             ;; place cursor on one of the virtual spaces
             (if (= point row-beg)
                 (put-text-property
