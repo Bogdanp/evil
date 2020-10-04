@@ -1,9 +1,9 @@
-;;; evil-ex.el --- Ex-mode
+;;; evil-ex.el --- Ex-mode -*- lexical-binding: nil -*-
 
 ;; Author: Frank Fischer <frank fischer at mathematik.tu-chemnitz.de>
 ;; Maintainer: Vegard Øye <vegard_oye at hotmail.com>
 
-;; Version: 1.2.13
+;; Version: 1.14.0
 
 ;;
 ;; This file is NOT part of GNU Emacs.
@@ -56,7 +56,7 @@
      number)
     (command #'evil-ex-parse-command)
     (binding
-     "[~&*@<>=:]+\\|[[:alpha:]-]+\\|!")
+     "[~&*@<>=:]+\\|[[:alpha:]_]+\\|!")
     (emacs-binding
      "[[:alpha:]-][[:alnum:][:punct:]-]+")
     (bang
@@ -170,7 +170,7 @@ is appended to the line."
                 (let ((arg (prefix-numeric-value current-prefix-arg)))
                   (cond ((< arg 0) (setq arg (1+ arg)))
                         ((> arg 0) (setq arg (1- arg))))
-                  (if (= arg 0) '(".")
+                  (if (= arg 0) "."
                     (format ".,.%+d" arg)))))
               evil-ex-initial-input)))
       (and (> (length s) 0) s))))
@@ -222,13 +222,20 @@ Otherwise behaves like `delete-backward-char'."
   (unless (minibufferp)
     (abort-recursive-edit)))
 
+(defun evil-ex-command-window-execute (config result)
+  (select-window (active-minibuffer-window) t)
+  (set-window-configuration config)
+  (delete-minibuffer-contents)
+  (insert result)
+  (exit-minibuffer))
+
 (defun evil-ex-setup ()
   "Initialize Ex minibuffer.
 This function registers several hooks that are used for the
 interactive actions during ex state."
   (add-hook 'post-command-hook #'evil-ex-abort)
   (add-hook 'after-change-functions #'evil-ex-update nil t)
-  (add-hook 'minibuffer-exit-hook #'evil-ex-teardown)
+  (add-hook 'minibuffer-exit-hook #'evil-ex-teardown nil t)
   (when evil-ex-previous-command
     (add-hook 'pre-command-hook #'evil-ex-remove-default))
   (remove-hook 'minibuffer-setup-hook #'evil-ex-setup)
@@ -248,7 +255,7 @@ interactive actions during ex state."
   "Deinitialize Ex minibuffer.
 Clean up everything set up by `evil-ex-setup'."
   (remove-hook 'post-command-hook #'evil-ex-abort)
-  (remove-hook 'minibuffer-exit-hook #'evil-ex-teardown)
+  (remove-hook 'minibuffer-exit-hook #'evil-ex-teardown t)
   (remove-hook 'after-change-functions #'evil-ex-update t)
   (when evil-ex-argument-handler
     (let ((runner (evil-ex-argument-handler-runner
@@ -379,15 +386,10 @@ in case of incomplete or unknown commands."
     (remove-text-properties (minibuffer-prompt-end) (point-max) '(face nil evil))))
 
 (defun evil-ex-command-completion-at-point ()
-  (let ((context (evil-ex-syntactic-context (1- (point)))))
-    (when (memq 'command context)
-      (let ((beg (or (get-text-property 0 'ex-index evil-ex-cmd)
-                     (point)))
-            (end (1+ (or (get-text-property (1- (length evil-ex-cmd))
-                                            'ex-index
-                                            evil-ex-cmd)
-                         (1- (point))))))
-        (list beg end (evil-ex-completion-table))))))
+  (let ((beg (or (get-text-property 0 'ex-index evil-ex-cmd)
+                 (point)))
+        (end (point)))
+    (list beg end (evil-ex-completion-table) :exclusive 'no)))
 
 (defun evil-ex-completion-table ()
   (cond
@@ -497,9 +499,9 @@ in case of incomplete or unknown commands."
     (if (string-match "^[^][]*\\(\\[\\(.*\\)\\]\\)[^][]*$" cmd)
         (let ((abbrev (replace-match "" nil t cmd 1))
               (full (replace-match "\\2" nil nil cmd 1)))
-          (evil-add-to-alist 'evil-ex-commands full function)
-          (evil-add-to-alist 'evil-ex-commands abbrev full))
-      (evil-add-to-alist 'evil-ex-commands cmd function))))
+          (evil--add-to-alist 'evil-ex-commands full function)
+          (evil--add-to-alist 'evil-ex-commands abbrev full))
+      (evil--add-to-alist 'evil-ex-commands cmd function))))
 
 (defun evil-ex-make-argument-handler (runner completer)
   (list runner completer))
@@ -541,6 +543,7 @@ keywords and function:
   or 'update then ARG is the current value of this argument. If
   FLAG is 'stop then arg is nil."
   (declare (indent defun)
+           (doc-string 2)
            (debug (&define name
                            [&optional stringp]
                            [&rest [keywordp function-form]])))
@@ -557,7 +560,7 @@ keywords and function:
          ((eq key :completion-at-point)
           (setq completer (cons 'completion-at-point func))))))
     `(eval-and-compile
-       (evil-add-to-alist
+       (evil--add-to-alist
         'evil-ex-argument-types
         ',arg-type
         '(,runner ,completer)))))
@@ -645,29 +648,35 @@ works accordingly."
   "Replace special symbols in FILE-NAME.
 Replaces % by the current file-name,
 Replaces # by the alternate file-name in FILE-NAME."
-  (let ((current-fname (buffer-file-name))
+  (let ((remote (file-remote-p file-name))
+        (current-fname (buffer-file-name))
         (alternate-fname (and (other-buffer)
                               (buffer-file-name (other-buffer)))))
+    (setq file-name (or (file-remote-p file-name 'localname) file-name))
     (when current-fname
+      (setq current-fname (or (file-remote-p current-fname 'localname)
+                              current-fname))
       (setq file-name
             (replace-regexp-in-string "\\(^\\|[^\\\\]\\)\\(%\\)"
                                       current-fname file-name
                                       t t 2)))
     (when alternate-fname
+      (setq alternate-fname (or (file-remote-p alternate-fname 'localname)
+                                alternate-fname))
       (setq file-name
             (replace-regexp-in-string "\\(^\\|[^\\\\]\\)\\(#\\)"
                                       alternate-fname file-name
                                       t t 2)))
     (setq file-name
           (replace-regexp-in-string "\\\\\\([#%]\\)"
-                                    "\\1" file-name t)))
+                                    "\\1" file-name t))
+    (setq file-name (concat remote file-name)))
   file-name)
 
 (defun evil-ex-file-arg ()
   "Returns the current Ex argument as a file name.
 This function interprets special file names like # and %."
-  (unless (or (null evil-ex-argument)
-              (zerop (length evil-ex-argument)))
+  (unless (zerop (length evil-ex-argument))
     (evil-ex-replace-special-filenames evil-ex-argument)))
 
 (defun evil-ex-repeat (count)
@@ -845,13 +854,13 @@ START is the start symbol, which defaults to `expression'."
     (when result
       (setq command (car-safe result)
             string (cdr-safe result))
-      ;; check whether the parsed command is followed by a slash or
-      ;; number and the part before it is not a known ex binding
+      ;; check whether the parsed command is followed by a slash, dash
+      ;; or number and either the part before is NOT known to be a binding,
+      ;; or the complete string IS known to be a binding
       (when (and (> (length string) 0)
-                 (string-match-p "^[/[:digit:]]" string)
-                 (not (evil-ex-binding command t)))
-        ;; if this is the case, assume the slash or number and all
-        ;; following symbol characters form an (Emacs-)command
+                 (string-match-p "^[-/[:digit:]]" string)
+                 (or (evil-ex-binding (concat command string) t)
+                     (not (evil-ex-binding command t))))
         (setq result (evil-parser (concat command string)
                                   'emacs-binding
                                   evil-ex-grammar)
@@ -902,6 +911,33 @@ POS defaults to the current position of point."
       (setq pos 0))
     (when contexts
       (nth pos contexts))))
+
+(defun evil-parser--dexp (obj)
+  "Parse a numerical dollar-sign symbol.
+Given e.g. $4, return 4."
+  (when (symbolp obj)
+    (let ((str (symbol-name obj)))
+      (save-match-data
+        (when (string-match "\\$\\([0-9]+\\)" str)
+          (string-to-number (match-string 1 str)))))))
+
+(defun evil-parser--dval (obj result)
+  "Substitute all dollar-sign symbols in OBJ.
+Each dollar-sign symbol is replaced with the corresponding
+element in RESULT, so that $1 becomes the first element, etc.
+The special value $0 is substituted with the whole list RESULT.
+If RESULT is not a list, all dollar-sign symbols are substituted with
+RESULT."
+  (if (listp obj)
+      (mapcar (lambda (obj) (evil-parser--dval obj result)) obj)
+    (let ((num (evil-parser--dexp obj)))
+      (if num
+          (if (not (listp result))
+              result
+            (if (eq num 0)
+                `(list ,@result)
+              (nth (1- num) result)))
+        obj))))
 
 (defun evil-parser (string symbol grammar &optional greedy syntax)
   "Parse STRING as a SYMBOL in GRAMMAR.
@@ -1100,54 +1136,33 @@ The following symbols have reserved meanings within a grammar:
       ;; semantic action
       (when (and pair func (not syntax))
         (setq result (car pair))
-        (let* ((dexp
-                #'(lambda (obj)
-                    (when (symbolp obj)
-                      (let ((str (symbol-name obj)))
-                        (save-match-data
-                          (when (string-match "\\$\\([0-9]+\\)" str)
-                            (string-to-number (match-string 1 str))))))))
-               ;; traverse a tree for dollar expressions
-               (dval nil)
-               (dval
-                #'(lambda (obj)
-                    (if (listp obj)
-                        (mapcar dval obj)
-                      (let ((num (funcall dexp obj)))
-                        (if num
-                            (if (not (listp result))
-                                result
-                              (if (eq num 0)
-                                  `(list ,@result)
-                                (nth (1- num) result)))
-                          obj))))))
-          (cond
-           ((null func)
-            (setq result nil))
-           ;; lambda function
-           ((eq (car-safe func) 'lambda)
-            (if (memq symbol '(+ seq))
-                (setq result `(funcall ,func ,@result))
-              (setq result `(funcall ,func ,result))))
-           ;; string replacement
-           ((or (stringp func) (stringp (car-safe func)))
-            (let* ((symbol (or (car-safe (cdr-safe func))
-                               (and (boundp 'context) context)
-                               (car-safe (car-safe grammar))))
-                   (string (if (stringp func) func (car-safe func))))
-              (setq result (car-safe (evil-parser string symbol grammar
-                                                  greedy syntax)))))
-           ;; dollar expression
-           ((funcall dexp func)
-            (setq result (funcall dval func)))
-           ;; function call
-           ((listp func)
-            (setq result (funcall dval func)))
-           ;; symbol
-           (t
-            (if (memq symbol '(+ seq))
-                (setq result `(,func ,@result))
-              (setq result `(,func ,result))))))
+        (cond
+         ((null func)
+          (setq result nil))
+         ;; lambda function
+         ((eq (car-safe func) 'lambda)
+          (if (memq symbol '(+ seq))
+              (setq result `(funcall ,func ,@result))
+            (setq result `(funcall ,func ,result))))
+         ;; string replacement
+         ((or (stringp func) (stringp (car-safe func)))
+          (let* ((symbol (or (car-safe (cdr-safe func))
+                             (and (boundp 'context) context)
+                             (car-safe (car-safe grammar))))
+                 (string (if (stringp func) func (car-safe func))))
+            (setq result (car-safe (evil-parser string symbol grammar
+                                                greedy syntax)))))
+         ;; dollar expression
+         ((evil-parser--dexp func)
+          (setq result (evil-parser--dval func result)))
+         ;; function call
+         ((listp func)
+          (setq result (evil-parser--dval func result)))
+         ;; symbol
+         (t
+          (if (memq symbol '(+ seq))
+              (setq result `(,func ,@result))
+            (setq result `(,func ,result)))))
         (setcar pair result))))
     ;; weed out incomplete matches
     (when pair
