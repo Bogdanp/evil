@@ -2135,23 +2135,10 @@ The following special registers are supported.
               (let ((reg (- register ?1)))
                 (and (< reg (length kill-ring))
                      (current-kill reg t))))
-             ((memq register '(?* ?+))
-              ;; the following code is modified from
-              ;; `x-selection-value-internal'
-              (let ((what (if (eq register ?*) 'PRIMARY 'CLIPBOARD))
-                    (request-type (or (and (boundp 'x-select-request-type)
-                                           x-select-request-type)
-                                      '(UTF8_STRING COMPOUND_TEXT STRING)))
-                    text)
-                (unless (consp request-type)
-                  (setq request-type (list request-type)))
-                (while (and request-type (not text))
-                  (condition-case nil
-                      (setq text (evil-get-selection what (pop request-type)))
-                    (error nil)))
-                (when text
-                  (remove-text-properties 0 (length text) '(foreign-selection nil) text))
-                text))
+             ((eq register ?*)
+              (gui--selection-value-internal 'PRIMARY))
+             ((eq register ?+)
+              (gui--selection-value-internal 'CLIPBOARD))
              ((eq register ?\C-W)
               (unless (evil-ex-p)
                 (user-error "Register <C-w> only available in ex state"))
